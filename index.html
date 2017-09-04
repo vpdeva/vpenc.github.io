@@ -1,0 +1,157 @@
+<html>
+
+<head>
+<link rel="icon" type="image/x-icon" href="favicon.ico"/>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css" integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ" crossorigin="anonymous">
+<script src="https://code.jquery.com/jquery-3.1.1.slim.min.js" integrity="sha384-A7FZj7v+d/sdmMqp/nOQwliLvUsJfDHW+k9Omg/a/EheAdgtzNs3hpfag6Ed950n" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tether/1.4.0/js/tether.min.js" integrity="sha384-DztdAPBWPRXSA/3eYEEUWrWCy7G5KFbe8fFjk5JAIxUYHKkDx6Qin1DkWx51bBrb" crossorigin="anonymous"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/js/bootstrap.min.js" integrity="sha384-vBWWzlZJ8ea9aCX4pEW3rVHjgjt7zpkNpZk+02D9phzyeVkE+jo0ieGizqPLForn" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.5/require.js" type="text/javascript"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/core.js"></script>
+<script type="text/javascript" src="node_modules/buffer-xor/index.js"></script>
+<script type="text/javascript" src="node_modules/node-rsa/src/NodeRSA.js"></script>
+<script type="text/javascript" src="node_modules/buffer/index.js"></script>
+<!-- <script type="text/javascript" src="pin.js"></script> -->
+
+ <script type="text/javascript">
+  
+function convertViewToModel(pin) {
+      if (pin) {
+        var pinBlock = document.getElementById("pin").value;;
+
+        // create pin block
+        if (pinBlock.length == 4) {
+          pinBlock = this.getPinBlock(pinBlock);
+        }
+
+        // generate random Triple Des Key (32 bits)
+        // var key1andKey2 = this.generateTripleDesKey();
+        // console.log('Key1 and Key 2: ', key1andKey2);
+
+        //Triple Des Key Algorithm (K1 | K2 | K1)
+        var tripleDesK1K2 = 'F72985199E805EF2AD298385E04FCE68';
+        var tripleDesKey1 = tripleDesK1K2.substring(0, 16);
+        var k1k2tripleDesKey = new Buffer(tripleDesK1K2, 'hex');
+        var k1k2k1tripleDesKey = CryptoJS.enc.Hex.parse(tripleDesK1K2 + tripleDesKey1);
+        console.log('TripleDesKeyHex: ' + tripleDesK1K2 + tripleDesKey1);
+
+        // encrypt pin block with Triple Des Key
+        var encryptedPinBlock = CryptoJS.TripleDES.encrypt(
+          pinBlock,
+          k1k2k1tripleDesKey,
+          {
+            mode: CryptoJS.mode.ECB,
+            padding: CryptoJS.pad.NoPadding,
+          }
+        );
+        var encPinBlock = encryptedPinBlock.ciphertext.toString().toUpperCase();
+        document.getElementById("encrypted").value = encPinBlock;
+        console.log('Encrypted Pin Block (Triple Des): ' + encPinBlock);
+
+        // encrypt Triple Des Key
+        var encryptedTripleDesKey = this.encryptTripleDesKey(k1k2tripleDesKey);
+        return encryptedTripleDesKey.toString();
+      }
+      return;
+    }
+
+     function getPinBlock(pin) {
+      // creating pin and tan hex block (string)
+      var pinBlock = '04' + pin + 'FFFFFFFFFF';
+      var tan = this.getOption('tan');
+      var tanBlock = '0000' + tan.slice(0, -1).substring(3);
+      console.log('Pin: ' + pin);
+      console.log('Tan: ' + tan);
+
+      // convert to Hex
+      pinBlock = new Buffer(pinBlock, 'hex');
+      tanBlock = new Buffer(tanBlock, 'hex');
+
+      var xorBlock = xor(pinBlock, tanBlock);
+      console.log('pinBlock in Hex: ' + xorBlock.toString('hex'));
+      return CryptoJS.enc.Hex.parse(xorBlock.toString('hex'));
+    }
+
+     function getPinFromBlock(xorBlock) {
+      xorBlock = new Buffer(xorBlock, 'hex');
+      var psuedoPinBlock = document.getElementById("tan").value;
+      psuedoPinBlock = new Buffer('0000' + psuedoPinBlock.substr(4), 'hex');
+      var pinBlock = xor(xorBlock, psuedoPinBlock);
+      pinBlock = pinBlock.toString('hex');
+      return pinBlock.substr(2, 4);
+    }
+
+     function generateTripleDesKey() {
+      var tripleDesKey = CryptoJS.lib.WordArray.random(64 / 8);
+      console.log('Triple Des Key (Hex string): ' + tripleDesKey);
+      return CryptoJS.enc.Hex.parse(tripleDesKey);
+    }
+
+     function encryptTripleDesKey(tripleDesKey) {
+      //Encrypt Triple Des Key using public key
+      var publicKey = document.getElementById("publickey").value;
+      var key = NodeRSA();
+      var keyBuffer = new Buffer(publicKey, 'hex');
+      key.importKey(keyBuffer, 'pkcs1-public-der');
+      key.setOptions({ encryptionScheme: 'pkcs1' });
+      var encrypted = key.encrypt(tripleDesKey, 'hex');
+      var encrypted3deskey = encrypted.toUpperCase();
+      document.getElementById("3Des").value = encrypted3deskey;
+      console.log('Encrypted 3DES Key: ', encrypted3deskey);
+
+      return encrypted;
+    }
+
+</script>
+<title>Encrypting PIN and Triple DES Key</title>
+</head>
+
+<form>
+      <h5 style="margin-top: 10px; margin-left: 15px"><u>Encrypting PIN and Triple DES Key</u></h5>
+
+  <div class="form-group">
+    <label for="tan" class="col-sm-2 control-label">Enter TAN</label>
+    <div class="col-lg-12">
+    <input type="number" class="form-control" id="tan" placeholder="Enter Temporary Account Number" value="9898987774412856">
+  </div>
+  </div>
+
+
+  <div class="form-group">
+    <label for="publicKey" class="col-sm-2 control-label">Enter Public Key</label>
+    <div class="col-lg-12"><input type="text" class="form-control" id="publickey" placeholder="Enter Public Key" value="3082010A0282010100BA5506BBB50DB733183827B80FF531B6F1EED53D9AAC31D432F92D5CEE7E03F9651CB2C802A0A5ABC7496E88740AF915D376D3B88FA89E2A790EEC580A6B2227C02BBEEF264F5F2979A6441B50FDA05A08EBF6E7629B1157EF60769F7E0C40C57C47D3631D4EA468D76D8D93E48875E84317354D61FC633525B75E877E350478C4C737B2663D1B38D7EF74C2257EE96A5D5876280BF86F67C5DFE5985D4821E8186F659F2FE51F23D9A7B6DBB2FF70E47A647C7EDE083F1F9BA4882099891957AEEFC5A88AADE706E4BECD240FCD78844D2B6CC9FD93BBBC753A130E97D941538AD931BF7C562FC844E622EB501E3E4028FF13582B73FD431C87CAAE39BBA4270203010001">
+  </div>
+  </div>
+
+  <div class="form-group">
+    <label for="3DesKey" class="col-sm-2 control-label">Enter Triple Des Key</label>
+    <div class="col-lg-12"><input type="text" class="form-control" id="3DesKey" placeholder="Enter Triple Des Key" value="F72985199E805EF2AD298385E04FCE68">
+  </div>
+  </div>
+
+   <div class="col-md-1"><button type="submit" style="margin-bottom:10px;" class="btn btn-primary" disabled>Fetch</button></div>
+
+   <div class="form-group">
+    <label for="pin" class="col-sm-2 control-label">Enter PIN</label>
+    <div class="col-lg-12">
+    <input type="password" pattern="[0-9]*" inputmode="numeric" value="1234" maxlength="4" class="form-control" id="pin" aria-describedby="pin" placeholder="Enter PIN">
+  </div>
+  </div>
+
+    <div class="col-md-1"><button style="margin-bottom:10px;" type="submit" id="button" onclick="convertViewToModel(); encryptTripleDesKey()" class="btn btn-primary">Go</button></div>
+  
+   <div class="form-group">
+      <label for="encrypted" class="col-sm-2 control-label">Encrypted PIN Block</label>
+      <div class="col-lg-12">
+      <textarea class="form-control" id="encrypted" type="text" disabled></textarea>
+      </div>
+    </div>
+   
+    <div class="form-group">
+      <label for="3Des" class="col-sm-2 control-label">Encrypted 3DES Key</label>
+      <div class="col-lg-12">
+        <textarea class="form-control" id="3Des" type="text" disabled></textarea>
+      </div>
+    </div>
+</form>
+</html>
